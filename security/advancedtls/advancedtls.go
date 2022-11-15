@@ -146,6 +146,15 @@ type ClientOptions struct {
 	RootCertificateOptions
 	// VType is the verification type on the client side.
 	VType VerificationType
+	// MinVersion contains the minimum TLS version that is acceptable.
+	// By default, TLS 1.2 is currently used as the minimum when acting as a
+	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
+	// supported by this package, both as a client and as a server.
+	MinVersion uint16
+	// MaxVersion contains the maximum TLS version that is acceptable.
+	// By default, the maximum version supported by this package is used,
+	// which is currently TLS 1.3.
+	MaxVersion uint16
 }
 
 // ServerOptions contains all the fields and functions needed to be filled by
@@ -177,12 +186,24 @@ type ServerOptions struct {
 	RequireClientCert bool
 	// VType is the verification type on the server side.
 	VType VerificationType
+	// MinVersion contains the minimum TLS version that is acceptable.
+	// By default, TLS 1.2 is currently used as the minimum when acting as a
+	// client, and TLS 1.0 when acting as a server. TLS 1.0 is the minimum
+	// supported by this package, both as a client and as a server.
+	MinVersion uint16
+	// MaxVersion contains the maximum TLS version that is acceptable.
+	// By default, the maximum version supported by this package is used,
+	// which is currently TLS 1.3.
+	MaxVersion uint16
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
 	if o.VType == SkipVerification && o.VerifyPeer == nil {
 		return nil, fmt.Errorf(
 			"client needs to provide custom verification mechanism if choose to skip default verification")
+	}
+	if o.MinVersion > o.MaxVersion {
+		return nil, fmt.Errorf("the minimum TLS version is larger than the maximum TLS version")
 	}
 	// We have to set InsecureSkipVerify to true to skip the default checks and
 	// use the verification function we built from buildVerifyFunc.
@@ -192,6 +213,8 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		GetClientCertificate: o.GetClientCertificate,
 		RootCAs:              o.RootCACerts,
 		InsecureSkipVerify:   true,
+		MinVersion:           o.MinVersion,
+		MaxVersion:           o.MaxVersion,
 	}
 	return config, nil
 }
@@ -204,6 +227,9 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		return nil, fmt.Errorf(
 			"server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
+	if o.MinVersion > o.MaxVersion {
+		return nil, fmt.Errorf("the minimum TLS version is larger than the maximum TLS version")
+	}
 	clientAuth := tls.NoClientCert
 	if o.RequireClientCert {
 		// We have to set clientAuth to RequireAnyClientCert to force underlying
@@ -215,6 +241,8 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		ClientAuth:     clientAuth,
 		Certificates:   o.Certificates,
 		GetCertificate: o.GetCertificate,
+		MinVersion:     o.MinVersion,
+		MaxVersion:     o.MaxVersion,
 	}
 	if o.RootCACerts != nil {
 		config.ClientCAs = o.RootCACerts
