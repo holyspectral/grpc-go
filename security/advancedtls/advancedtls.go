@@ -119,10 +119,13 @@ const (
 // the client to the server to prove client's identities. The rules for setting
 // these two fields are:
 // If requiring mutual authentication on server side:
-//     Either Certificates or GetClientCertificate must be set; the other will
-//     be ignored.
+//
+//	Either Certificates or GetClientCertificate must be set; the other will
+//	be ignored.
+//
 // Otherwise:
-//     Nothing needed(the two fields will be ignored).
+//
+//	Nothing needed(the two fields will be ignored).
 type ClientOptions struct {
 	// If field Certificates is set, field GetClientCertificate will be ignored.
 	// The client will use Certificates every time when asked for a certificate,
@@ -155,6 +158,8 @@ type ClientOptions struct {
 	// By default, the maximum version supported by this package is used,
 	// which is currently TLS 1.3.
 	MaxVersion uint16
+
+	CipherSuites []uint16
 }
 
 // ServerOptions contains all the fields and functions needed to be filled by
@@ -195,6 +200,8 @@ type ServerOptions struct {
 	// By default, the maximum version supported by this package is used,
 	// which is currently TLS 1.3.
 	MaxVersion uint16
+
+	CipherSuites []uint16
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
@@ -208,13 +215,15 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 	// We have to set InsecureSkipVerify to true to skip the default checks and
 	// use the verification function we built from buildVerifyFunc.
 	config := &tls.Config{
-		ServerName:           o.ServerNameOverride,
-		Certificates:         o.Certificates,
-		GetClientCertificate: o.GetClientCertificate,
-		RootCAs:              o.RootCACerts,
-		InsecureSkipVerify:   true,
-		MinVersion:           o.MinVersion,
-		MaxVersion:           o.MaxVersion,
+		ServerName:               o.ServerNameOverride,
+		Certificates:             o.Certificates,
+		GetClientCertificate:     o.GetClientCertificate,
+		RootCAs:                  o.RootCACerts,
+		InsecureSkipVerify:       true,
+		MinVersion:               o.MinVersion,
+		MaxVersion:               o.MaxVersion,
+		CipherSuites:             o.CipherSuites,
+		PreferServerCipherSuites: true,
 	}
 	return config, nil
 }
@@ -238,11 +247,13 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		clientAuth = tls.RequireAnyClientCert
 	}
 	config := &tls.Config{
-		ClientAuth:     clientAuth,
-		Certificates:   o.Certificates,
-		GetCertificate: o.GetCertificate,
-		MinVersion:     o.MinVersion,
-		MaxVersion:     o.MaxVersion,
+		ClientAuth:               clientAuth,
+		Certificates:             o.Certificates,
+		GetCertificate:           o.GetCertificate,
+		MinVersion:               o.MinVersion,
+		MaxVersion:               o.MaxVersion,
+		CipherSuites:             o.CipherSuites,
+		PreferServerCipherSuites: true,
 	}
 	if o.RootCACerts != nil {
 		config.ClientCAs = o.RootCACerts
@@ -337,9 +348,9 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 // and possibly custom verification check.
 // We have to build our own verification function here because current
 // tls module:
-//   1. does not have a good support on root cert reloading.
-//   2. will ignore basic certificate check when setting InsecureSkipVerify
-//   to true.
+//  1. does not have a good support on root cert reloading.
+//  2. will ignore basic certificate check when setting InsecureSkipVerify
+//     to true.
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
@@ -447,7 +458,8 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 }
 
 // TODO(ZhenLian): The code below are duplicates with gRPC-Go under
-//                 credentials/internal. Consider refactoring in the future.
+//
+//	credentials/internal. Consider refactoring in the future.
 const alpnProtoStrH2 = "h2"
 
 func appendH2ToNextProtos(ps []string) []string {
